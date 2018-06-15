@@ -79,7 +79,7 @@ class Binarna(AST('op lijevo desno')):
             if o ** c0.PLUS: return x + y
             elif o ** c0.MINUS: return x - y
             elif o ** c0.PUTA: return x * y
-            elif o ** c0.KROZ: return x / y
+            elif o ** c0.KROZ: return x // y #handlaj  dijeljenje nulom
             else: assert not 'slučaj'
         except ArithmeticError as ex: o.problem(*ex.args)
 
@@ -95,6 +95,6 @@ def tokeni(string): return list(c0_lex(string))
 
 if __name__ == '__main__':
 
-    print(tokeni('(3+7)*4'))
-    print(izračunaj('(3+7)*4'))
+    print(tokeni('(3+7)/0'))
+    print(izračunaj('(3+7)/0'))
 
