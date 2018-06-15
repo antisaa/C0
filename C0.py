@@ -11,7 +11,7 @@ def modl(number, br):
 
 def integer(number):
     number = sign(int(number)) * ( (sign(int(number))*int(number)) % (2**32))
-    if int(number) > 2**31:
+    if int(number) >= 2**31:
         return int(number) - 2**32
     else:
         return number
@@ -20,6 +20,7 @@ class c0(enum.Enum):
     PLUS, MINUS, PUTA, KROZ, MOD = '+-*/%'
     JEDNAKO, MANJE, OTV, ZATV = '=<()'
     LSHIFT, RSHIFT = '<<', '>>'
+    BITAND, BITOR, BITXOR = '&|^'
     INT, BOOL = 'int', 'bool'
     class BROJ(Token):
         def vrijednost(self, mem):
@@ -43,19 +44,34 @@ def c0_lex(string):
         else: yield lex.token(operator(c0, znak) or lex.greška())
 
 ### Beskontekstna gramatika
-# start ->  izraz                                                           KVAČICA
+# start -> bit_or
+# bit_or -> bit_xor
+# bit_xor -> bit_and
+# bit_and ->  shift_izraz
+# shift_izraz -> shift_izraz LSHIFT izraz | shift_izraz RSHIFT izraz | izrazKVAČICA
 # izraz -> izraz PLUS član | izraz MINUS član | član                        KVAČICA
-# član -> član PUTA faktor | član KROZ faktor | član MOD faktor | faktor
+# član -> član PUTA faktor | član KROZ faktor | član MOD faktor | faktor    KVAČICA
 # faktor ->  baza | MINUS faktor                                            KVAČICA
-# baza -> BROJ | OTV izraz ZATV                                             KVAČICA
+# baza -> BROJ | OTV shift_izraz ZATV                                       KVAČICA
 
 class c0Parser(Parser):
     def start(self):
         env = []
         while True:
-            izraz = self.izraz()
-            if self >> E.KRAJ: return Program(env, izraz)
+            shift_izraz = self.shift_izraz()
+            if self >> E.KRAJ: return Program(env, shift_izraz)
             else: self.greška()
+
+    def shift_izraz(self):
+        trenutni = self.izraz()
+        while True:
+            if self >> {c0.RSHIFT, c0.LSHIFT}:
+                trenutni = Binarna(
+                    op = self.zadnji,
+                    lijevo = trenutni,
+                    desno = self.izraz()
+                )
+            else: return trenutni
 
     def izraz(self):
         trenutni = self.član()
@@ -83,23 +99,31 @@ class c0Parser(Parser):
     def baza(self):
         if self >> c0.BROJ: trenutni = self.zadnji
         elif self >> c0.OTV:
-            trenutni = self.izraz()
+            trenutni = self.shift_izraz()
             self.pročitaj(c0.ZATV)
         else: self.greška()
         return trenutni
 
 
-class Program(AST('okolina izraz')):
+class Program(AST('okolina shift_izraz')):
     def izvrši(self):
         env = {}
-        for ime, izraz in self.okolina: env[ime.sadržaj] = izraz.vrijednost(env)
-        return self.izraz.vrijednost(env)
+        for ime, shift_izraz in self.okolina: env[ime.sadržaj] = shift_izraz.vrijednost(env)
+        return self.shift_izraz.vrijednost(env)
 
 class Binarna(AST('op lijevo desno')):
     def vrijednost(self, env):
         o,x,y = self.op, self.lijevo.vrijednost(env), self.desno.vrijednost(env)
         try:
-            if o ** c0.PLUS: return integer(x + y)
+            if o ** c0.RSHIFT:
+                if y < 0: raise SemantičkaGreška("right shift count is negative")
+                elif y > 31: raise SemantičkaGreška("right shift count >= width of type")
+                else: return integer(x * (2**y))
+            elif o ** c0.LSHIFT:
+                if y < 0: raise SemantičkaGreška("left shift count is negative")
+                elif y > 31: raise SemantičkaGreška("left shift count >= width of type")
+                else: return integer(x // (2**y))
+            elif o ** c0.PLUS: return integer(x + y)
             elif o ** c0.MINUS: return integer(x - y)
             elif o ** c0.PUTA: return integer(x * y)
             elif o ** c0.KROZ:
@@ -139,4 +163,13 @@ if __name__ == '__main__':
     print(integer(-2**31))
     print(int(-2**31)%(2**32))
     print(modl(-37,-5))
+
+    #print(izračunaj('1>>-1'))
+    print(izračunaj('1>>0'))
+    #print(izračunaj('1>>32'))
+    #print(izračunaj('1<<-1'))
+    print(izračunaj('1<<0'))
+    print(izračunaj('1<<31'))
+    #print(izračunaj('1<<32'))
+    print(integer(2**31))
 
