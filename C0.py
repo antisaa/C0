@@ -7,7 +7,7 @@ def sign(number):
         return 1
 
 def modl(number, br):
-    return sign(int(number)) * ( (sign(int(number))*int(number)) % int(br))
+    return sign(int(number)) * ( (sign(int(number)) * int(number) ) % (sign(br)*int(br)))
 
 def integer(number):
     number = sign(int(number)) * ( (sign(int(number))*int(number)) % (2**32))
@@ -19,6 +19,7 @@ def integer(number):
 class c0(enum.Enum):
     PLUS, MINUS, PUTA, KROZ, MOD = '+-*/%'
     JEDNAKO, MANJE, OTV, ZATV = '=<()'
+    LSHIFT, RSHIFT = '<<', '>>'
     INT, BOOL = 'int', 'bool'
     class BROJ(Token):
         def vrijednost(self, mem):
@@ -31,9 +32,14 @@ def c0_lex(string):
     for znak in iter(lex.čitaj, ''):
         if znak.isspace():
             lex.token(E.PRAZNO)
+        elif znak == '<': yield lex.token(c0.LSHIFT if lex.slijedi('<') else c0.MANJE)
+        elif znak == '>': yield lex.token(c0.RSHIFT if lex.slijedi('>') else c0.RSHIFT)
         elif znak.isdigit():
             lex.zvijezda(str.isdigit)
             yield lex.token(c0.BROJ)
+        elif znak.islower():
+            lex.zvijezda(str.isalpha)
+            yield lex.token(ključna_riječ(c0, lex.sadržaj))
         else: yield lex.token(operator(c0, znak) or lex.greška())
 
 ### Beskontekstna gramatika
@@ -97,14 +103,13 @@ class Binarna(AST('op lijevo desno')):
             elif o ** c0.MINUS: return integer(x - y)
             elif o ** c0.PUTA: return integer(x * y)
             elif o ** c0.KROZ:
-                print(x, y)
                 if y == 0 : raise SemantičkaGreška("Dijeljenje s nulom.")
                 elif integer(x) == -2**31 and integer(y) == -1 : raise SemantičkaGreška("Greška: overflow.")
-                return integer(sign(x) * ( (sign(x)*x) // y) ) #handlaj  dijeljenje nulom
+                return integer(sign(x) * sign(y) * ( (sign(x)*x) // (sign(y)*y)) ) #handlaj  dijeljenje nulom
             elif o ** c0.MOD:
                 if y == 0 : raise SemantičkaGreška("Dijeljenje s nulom.")
                 elif integer(x) == -2**31 and integer(y) == -1 : raise SemantičkaGreška("Greška: overflow.")
-                return integer(sign(x) * ( (sign(x)*x) % y) ) #handlaj  dijeljenje nulom
+                return integer(sign(x) * ( (sign(x)*x) % (sign(y)*y)) ) #handlaj  dijeljenje nulom
             else: assert not 'slučaj'
         except ArithmeticError as ex: o.problem(*ex.args)
 
@@ -121,10 +126,11 @@ def tokeni(string): return list(c0_lex(string))
 if __name__ == '__main__':
 
     print(tokeni('(3+7)%3'))
+    print()
     print(izračunaj('(3+7)%3'))
     print(integer(2**31+1))
-    print(izračunaj('-37%5'))
-    print(izračunaj('-37/5'))
+    print(izračunaj('-37% 5'))
+    print(izračunaj('-37/ 5'))
     #print(izračunaj('-2147483648/-1'))
     print(-37 % 5)
     print(-37 // 5)
@@ -132,5 +138,5 @@ if __name__ == '__main__':
     print(-2**31)
     print(integer(-2**31))
     print(int(-2**31)%(2**32))
-    print(modl(-37,5))
+    print(modl(-37,-5))
 
