@@ -23,6 +23,8 @@ class c0(enum.Enum):
     BITAND, BITOR, BITXOR = '&', '|', '^'
     INT, BOOL = 'int', 'bool'
     TRUE, FALSE = 'true', 'false'
+    LNOT,BNOT ='!~'
+    INC,DEC = '++','--'
 
     class BROJ(Token):
         def vrijednost(self, mem):
@@ -57,7 +59,9 @@ def c0_lex(string):
 # shift_izraz -> shift_izraz LSHIFT izraz | shift_izraz RSHIFT izraz | izraz                CHECK
 # izraz -> izraz PLUS član | izraz MINUS član | član                                        CHECK
 # član -> član PUTA faktor | član KROZ faktor | član MOD faktor | faktor                    CHECK
-# faktor ->  baza | MINUS faktor                                                            CHECK
+# faktor ->   l_not | MINUS faktor                                                          CHECK
+# l_not -> LNOT l_not | b_not
+# b_not -> BNOT b_not | baza
 # baza -> BROJ | OTV bit_or ZATV                                                            CHECK
 
 class c0Parser(Parser):
@@ -133,8 +137,19 @@ class c0Parser(Parser):
 
     def faktor(self):
         if self >> c0.MINUS: return Unarna(self.zadnji, self.faktor())
+        l_not = self.l_not()
+        return l_not
+
+    def l_not(self):
+        if self >> c0.LNOT: return Unarna(self.zadnji, self.l_not())
+        b_not = self.b_not()
+        return b_not
+
+    def b_not(self):
+        if self >> c0.BNOT: return Unarna(self.zadnji, self.b_not())
         baza = self.baza()
         return baza
+
 
     def baza(self):
         if self >> c0.BROJ: trenutni = self.zadnji
@@ -184,6 +199,8 @@ class Unarna(AST('op ispod')):
     def vrijednost(self, env):
         o, z = self.op, self.ispod.vrijednost(env)
         if o ** c0.MINUS: return -z
+        elif o ** c0.LNOT: return int(not z)
+        elif o ** c0.BNOT: return ~z
 
 
 def izračunaj(string): return c0Parser.parsiraj(c0_lex(string)).izvrši()
@@ -233,6 +250,11 @@ if __name__ == '__main__':
     print(izračunaj('3134|133>>2'))
     print(izračunaj('-(15<<13)/(3+4|3<<9)>>28-26'))
     print()
+    print(izračunaj('!3'))
+    print(izračunaj('!7'))
+    print(izračunaj('!0'))
+    print(izračunaj('~5'))
+    print()
     print(*tokeni('''int main()
 {
   int g;
@@ -241,4 +263,3 @@ if __name__ == '__main__':
   funkcije(7,true, 25 << 3);
   return 0;
 }'''))
-
