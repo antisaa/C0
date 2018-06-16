@@ -79,9 +79,10 @@ def c0_lex(string):
 ### BKG (ne sasvim BK:)
 # program -> (BOOL | INT) IME OTV parametri? ZATV VOTV naredba VZATV program?
 # parametri -> (BOOL | INT) IME (ZAREZ parametri)?
-# naredba -> pridruži TZAREZ| naredbe? |  VRATI izraz TZAREZ
+
+# naredba -> (pridruži | naredbe? |  VRATI izraz) TZAREZ
 # naredbe -> naredba (TZAREZ naredbe)?
-# pridruži -> IME [BOOL|INT] JEDNAKO [aritm | log]
+# pridruži -> IME [BOOL|INT] JEDNAKO [log | aritm]
 # log -> log ILI disjunkt | disjunkt
 # disjunkt -> aritm (MANJE | JEDNAKO) aritm | LIME | LKONST |
 #             LIME OTV argumenti ZATV
