@@ -7,7 +7,7 @@ def sign(number):
         return 1
 
 def modl(number, br):
-    return sign(int(number)) * ( (sign(int(number)) * int(number) ) % (sign(br)*int(br)))
+    return sign(int(number)) * ( (sign(int(number)) * int(number) ) % (sign(int(br))*int(br)))
 
 def integer(number):
     number = sign(int(number)) * ( (sign(int(number))*int(number)) % (2**32))
@@ -18,13 +18,19 @@ def integer(number):
 
 class c0(enum.Enum):
     PLUS, MINUS, PUTA, KROZ, MOD = '+-*/%'
-    JEDNAKO, MANJE, OTV, ZATV = '=<()'
+    JEDNAKO, MANJE, OTV, ZATV, VOTV, TZAREZ, ZAREZ, VZATV = '=<(){;,}'
     LSHIFT, RSHIFT = '<<', '>>'
     BITAND, BITOR, BITXOR = '&', '|', '^'
     INT, BOOL = 'int', 'bool'
+    TRUE, FALSE = 'true', 'false'
+
     class BROJ(Token):
         def vrijednost(self, mem):
             return integer(self.sadržaj)
+
+    class IME(Token):
+        def vrijednost(self,mem):
+            return mem[self]
 
 
 
@@ -40,19 +46,19 @@ def c0_lex(string):
             yield lex.token(c0.BROJ)
         elif znak.islower():
             lex.zvijezda(str.isalpha)
-            yield lex.token(ključna_riječ(c0, lex.sadržaj))
+            yield lex.token(ključna_riječ(c0, lex.sadržaj) or c0.IME)
         else: yield lex.token(operator(c0, znak) or lex.greška())
 
 ### Beskontekstna gramatika
-# start -> bit_or
-# bit_or -> bit_or BITOR bit_xor | bit_xor
-# bit_xor -> bit_xor BITXOR bit_and | bit_and
-# bit_and ->  bit_and BITAND shift_izraz | shift_izraz
-# shift_izraz -> shift_izraz LSHIFT izraz | shift_izraz RSHIFT izraz | izrazKVAČICA
-# izraz -> izraz PLUS član | izraz MINUS član | član                        KVAČICA
-# član -> član PUTA faktor | član KROZ faktor | član MOD faktor | faktor    KVAČICA
-# faktor ->  baza | MINUS faktor                                            KVAČICA
-# baza -> BROJ | OTV bit_or ZATV                                       KVAČICA
+# start -> bit_or                                                                           CHECK
+# bit_or -> bit_or BITOR bit_xor | bit_xor                                                  CHECK
+# bit_xor -> bit_xor BITXOR bit_and | bit_and                                               CHECK
+# bit_and ->  bit_and BITAND shift_izraz | shift_izraz                                      CHECK
+# shift_izraz -> shift_izraz LSHIFT izraz | shift_izraz RSHIFT izraz | izraz                CHECK
+# izraz -> izraz PLUS član | izraz MINUS član | član                                        CHECK
+# član -> član PUTA faktor | član KROZ faktor | član MOD faktor | faktor                    CHECK
+# faktor ->  baza | MINUS faktor                                                            CHECK
+# baza -> BROJ | OTV bit_or ZATV                                                            CHECK
 
 class c0Parser(Parser):
     def start(self):
@@ -212,6 +218,8 @@ if __name__ == '__main__':
 
     print(izračunaj('21474^0'))
     print(izračunaj('2147483647|-1'))
+    print()
+    print(tokeni('(212<<4&3134|133>>2^121356543)<<(3^7)>>(45689&25<<7)'))
     print(izračunaj('(212<<4&3134|133>>2^121356543)<<(3^7)>>(45689&25<<7)'))
     print()
     print(izračunaj('45689&25<<7'))
@@ -223,4 +231,14 @@ if __name__ == '__main__':
     print(izračunaj('133>>2'))
     print(izračunaj('2^121356543'))
     print(izračunaj('3134|133>>2'))
+    print(izračunaj('-(15<<13)/(3+4|3<<9)>>28-26'))
+    print()
+    print(*tokeni('''int main()
+{
+  int g;
+  g = 7;
+  bool mirko = true;
+  funkcije(7,true, 25 << 3);
+  return 0;
+}'''))
 
