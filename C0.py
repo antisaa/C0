@@ -62,6 +62,12 @@ def c0_lex(string):
         elif znak == '|':
             if lex.slijedi('|'):    yield lex.token(c0.LOGOR)
             else:   yield lex.token(c0.BITOR)
+        elif znak == '+':
+            if lex.slijedi('+'):    yield lex.token(c0.INC)
+            else:   yield lex.token(c0.PLUS)
+        elif znak == '-':
+            if lex.slijedi('-'):    yield lex.token(c0.DEC)
+            else:   yield lex.token(c0.MINUS)
         elif znak.isdigit():
             lex.zvijezda(str.isdigit)
             yield lex.token(c0.BROJ)
@@ -96,9 +102,7 @@ def c0_lex(string):
 # shift_izraz -> shift_izraz LSHIFT izraz | shift_izraz RSHIFT izraz | izraz                CHECK
 # izraz -> izraz PLUS član | izraz MINUS član | član                                        CHECK
 # član -> član PUTA faktor | član KROZ faktor | član MOD faktor | faktor                    CHECK
-# faktor ->   l_not | MINUS faktor                                                          CHECK
-# l_not -> LNOT l_not | b_not
-# b_not -> BNOT b_not | baza
+# faktor ->   baza | MINUS faktor | LNOT faktor | BNOT faktor | INC faktor | DEC faktor     CHECK
 # baza -> BROJ | OTV bit_or ZATV                                                            CHECK
 
 class c0Parser(Parser):
@@ -172,21 +176,17 @@ class c0Parser(Parser):
                 trenutni = Binarna(self.zadnji, trenutni, self.faktor())
             else: return trenutni
 
+
     def faktor(self):
         if self >> c0.MINUS: return Unarna(self.zadnji, self.faktor())
-        l_not = self.l_not()
-        return l_not
+        elif self >> c0.LNOT: return Unarna(self.zadnji, self.faktor())
+        elif self >> c0.BNOT: return Unarna(self.zadnji, self.faktor())
+        elif self >> c0.INC: return Unarna(self.zadnji, self.faktor())
+        elif self >> c0.DEC: return Unarna(self.zadnji, self.faktor())
 
-    def l_not(self):
-        if self >> c0.LNOT: return Unarna(self.zadnji, self.l_not())
-        b_not = self.b_not()
-        return b_not
 
-    def b_not(self):
-        if self >> c0.BNOT: return Unarna(self.zadnji, self.b_not())
         baza = self.baza()
         return baza
-
 
     def baza(self):
         if self >> c0.BROJ: trenutni = self.zadnji
@@ -238,6 +238,8 @@ class Unarna(AST('op ispod')):
         if o ** c0.MINUS: return -z
         elif o ** c0.LNOT: return int(not z)
         elif o ** c0.BNOT: return ~z
+        elif o ** c0.INC: return z+1
+        elif o ** c0.DEC: return z-1
 
 
 def izračunaj(string): return c0Parser.parsiraj(c0_lex(string)).izvrši()
@@ -290,6 +292,8 @@ if __name__ == '__main__':
     print(izračunaj('!3'))
     print(izračunaj('!7'))
     print(izračunaj('!0'))
+    print(izračunaj('++7'))
+    print(izračunaj('(--0)*3+8*(++7)'))
     print(izračunaj('~5'))
     print()
     print(*tokeni('''int main()
