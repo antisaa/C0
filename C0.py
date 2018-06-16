@@ -20,7 +20,7 @@ class c0(enum.Enum):
     PLUS, MINUS, PUTA, KROZ, MOD = '+-*/%'
     JEDNAKO, MANJE, OTV, ZATV = '=<()'
     LSHIFT, RSHIFT = '<<', '>>'
-    BITAND, BITOR, BITXOR = '&|^'
+    BITAND, BITOR, BITXOR = '&', '|', '^'
     INT, BOOL = 'int', 'bool'
     class BROJ(Token):
         def vrijednost(self, mem):
@@ -45,22 +45,56 @@ def c0_lex(string):
 
 ### Beskontekstna gramatika
 # start -> bit_or
-# bit_or -> bit_xor
-# bit_xor -> bit_and
-# bit_and ->  shift_izraz
+# bit_or -> bit_or BITOR bit_xor | bit_xor
+# bit_xor -> bit_xor BITXOR bit_and | bit_and
+# bit_and ->  bit_and BITAND shift_izraz | shift_izraz
 # shift_izraz -> shift_izraz LSHIFT izraz | shift_izraz RSHIFT izraz | izrazKVAČICA
 # izraz -> izraz PLUS član | izraz MINUS član | član                        KVAČICA
 # član -> član PUTA faktor | član KROZ faktor | član MOD faktor | faktor    KVAČICA
 # faktor ->  baza | MINUS faktor                                            KVAČICA
-# baza -> BROJ | OTV shift_izraz ZATV                                       KVAČICA
+# baza -> BROJ | OTV bit_or ZATV                                       KVAČICA
 
 class c0Parser(Parser):
     def start(self):
         env = []
         while True:
-            shift_izraz = self.shift_izraz()
-            if self >> E.KRAJ: return Program(env, shift_izraz)
+            bit_or = self.bit_or()
+            if self >> E.KRAJ: return Program(env, bit_or)
             else: self.greška()
+
+    def bit_or(self):
+        trenutni = self.bit_xor()
+        while True:
+            if self >> c0.BITOR:
+                trenutni = Binarna(
+                    op = self.zadnji,
+                    lijevo = trenutni,
+                    desno = self.bit_xor()
+                )
+            else: return trenutni
+
+    def bit_xor(self):
+        trenutni = self.bit_and()
+        while True:
+            if self >> c0.BITXOR:
+                trenutni = Binarna(
+                    op = self.zadnji,
+                    lijevo = trenutni,
+                    desno = self.bit_and()
+                )
+            else: return trenutni
+
+
+    def bit_and(self):
+        trenutni = self.shift_izraz()
+        while True:
+            if self >> c0.BITAND:
+                trenutni = Binarna(
+                    op = self.zadnji,
+                    lijevo = trenutni,
+                    desno = self.shift_izraz()
+                )
+            else: return trenutni
 
     def shift_izraz(self):
         trenutni = self.izraz()
@@ -99,30 +133,33 @@ class c0Parser(Parser):
     def baza(self):
         if self >> c0.BROJ: trenutni = self.zadnji
         elif self >> c0.OTV:
-            trenutni = self.shift_izraz()
+            trenutni = self.bit_or()
             self.pročitaj(c0.ZATV)
         else: self.greška()
         return trenutni
 
 
-class Program(AST('okolina shift_izraz')):
+class Program(AST('okolina bit_or')):
     def izvrši(self):
         env = {}
-        for ime, shift_izraz in self.okolina: env[ime.sadržaj] = shift_izraz.vrijednost(env)
-        return self.shift_izraz.vrijednost(env)
+        for ime, bit_or in self.okolina: env[ime.sadržaj] = bit_or.vrijednost(env)
+        return self.bit_or.vrijednost(env)
 
 class Binarna(AST('op lijevo desno')):
     def vrijednost(self, env):
         o,x,y = self.op, self.lijevo.vrijednost(env), self.desno.vrijednost(env)
         try:
-            if o ** c0.RSHIFT:
+            if o ** c0.BITOR: return integer(x) | integer(y)
+            elif o ** c0.BITXOR: return integer(x) ^ integer(y)
+            elif o ** c0.BITAND: return integer(x) & integer(y)
+            elif o ** c0.RSHIFT:
                 if y < 0: raise SemantičkaGreška("right shift count is negative")
                 elif y > 31: raise SemantičkaGreška("right shift count >= width of type")
-                else: return integer(x * (2**y))
+                else: return integer(x // (2**y))
             elif o ** c0.LSHIFT:
                 if y < 0: raise SemantičkaGreška("left shift count is negative")
                 elif y > 31: raise SemantičkaGreška("left shift count >= width of type")
-                else: return integer(x // (2**y))
+                else: return integer(x * (2**y))
             elif o ** c0.PLUS: return integer(x + y)
             elif o ** c0.MINUS: return integer(x - y)
             elif o ** c0.PUTA: return integer(x * y)
@@ -172,4 +209,18 @@ if __name__ == '__main__':
     print(izračunaj('1<<31'))
     #print(izračunaj('1<<32'))
     print(integer(2**31))
+
+    print(izračunaj('21474^0'))
+    print(izračunaj('2147483647|-1'))
+    print(izračunaj('(212<<4&3134|133>>2^121356543)<<(3^7)>>(45689&25<<7)'))
+    print()
+    print(izračunaj('45689&25<<7'))
+    print(izračunaj('(3^7)'))
+    print(izračunaj('212<<4&3134|133>>2^121356543'))
+    print(izračunaj('3134|133>>2^121356543'))
+    print()
+    print(izračunaj('212<<4&3134'))
+    print(izračunaj('133>>2'))
+    print(izračunaj('2^121356543'))
+    print(izračunaj('3134|133>>2'))
 
