@@ -18,9 +18,13 @@ def integer(number):
 
 class c0(enum.Enum):
     PLUS, MINUS, PUTA, KROZ, MOD = '+-*/%'
-    JEDNAKO, MANJE, OTV, ZATV, VOTV, TZAREZ, ZAREZ, VZATV = '=<(){;,}'
+    OTV, ZATV, VOTV, TZAREZ, ZAREZ, VZATV = '(){;,}'
     LSHIFT, RSHIFT = '<<', '>>'
     BITAND, BITOR, BITXOR = '&', '|', '^'
+    LOGAND, LOGOR = '&&', '||'
+    EQL, DISEQL = '==', '!='
+    MANJE, VEĆE, VJEDNAKO, MJEDNAKO = '<', '>', '>=', '<='
+    JEDNAKO = '='
     INT, BOOL = 'int', 'bool'
     TRUE, FALSE = 'true', 'false'
     LNOT,BNOT ='!~'
@@ -41,8 +45,23 @@ def c0_lex(string):
     for znak in iter(lex.čitaj, ''):
         if znak.isspace():
             lex.token(E.PRAZNO)
-        elif znak == '<': yield lex.token(c0.LSHIFT if lex.slijedi('<') else c0.MANJE)
-        elif znak == '>': yield lex.token(c0.RSHIFT if lex.slijedi('>') else c0.RSHIFT)
+        elif znak == '<':
+            if lex.slijedi('<'):    yield lex.token(c0.LSHIFT)
+            elif lex.slijedi('='):  yield lex.token(c0.MJEDNAKO)
+            else:   yield lex.token(c0.MANJE)
+        elif znak == '>':
+            if lex.slijedi('>'):    yield lex.token(c0.RSHIFT)
+            elif lex.slijedi('='):  yield lex.token(c0.VJEDNAKO)
+            else:   yield lex.token(c0.VEĆE)
+        elif znak == '=':
+            if lex.slijedi('='):    yield lex.token(c0.EQL)
+            else:   yield lex.token(c0.JEDNAKO)
+        elif znak == '&':
+            if lex.slijedi('&'):    yield lex.token(c0.LOGAND)
+            else:   yield lex.token(c0.BITAND)
+        elif znak == '|':
+            if lex.slijedi('|'):    yield lex.token(c0.LOGOR)
+            else:   yield lex.token(c0.BITOR)
         elif znak.isdigit():
             lex.zvijezda(str.isdigit)
             yield lex.token(c0.BROJ)
@@ -50,6 +69,24 @@ def c0_lex(string):
             lex.zvijezda(str.isalpha)
             yield lex.token(ključna_riječ(c0, lex.sadržaj) or c0.IME)
         else: yield lex.token(operator(c0, znak) or lex.greška())
+
+### BKG (ne sasvim BK:)
+# program -> (BOOL | INT) IME OTV parametri? ZATV VOTV naredba VZATV program?
+# parametri -> (BOOL | INT) IME (ZAREZ parametri)?
+# naredba -> pridruži TZAREZ| naredbe? |  VRATI izraz TZAREZ
+# naredbe -> naredba (TZAREZ naredbe)?
+# pridruži -> IME [BOOL|INT] JEDNAKO [aritm | log]
+# log -> log ILI disjunkt | disjunkt
+# disjunkt -> aritm (MANJE | JEDNAKO) aritm | LIME | LKONST |
+#             LIME OTV argumenti ZATV
+# aritm -> aritm PLUS član | aritm MINUS član
+# član -> član ZVJEZDICA faktor | faktor | MINUS faktor
+# faktor -> BROJ | AIME | OTV aritm ZATV | AIME OTV argumenti ZATV
+# argumenti -> izraz (ZAREZ argumenti)?
+# izraz -> aritm |! log [KONTEKST!]
+
+
+
 
 ### Beskontekstna gramatika
 # start -> bit_or                                                                           CHECK
