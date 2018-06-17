@@ -47,6 +47,10 @@ class c0(enum.Enum):
         def vrijednost(self,mem):
             return mem[self]
 
+    class BREAK(Token):
+        def izvrši(self, mem):
+            raise BreakException
+
 def c0_lex(string):
     lex = Tokenizer(string)
     for znak in iter(lex.čitaj, ''):
@@ -80,9 +84,12 @@ def c0_lex(string):
             else:   yield lex.token(c0.LNOT)
         elif znak.isdigit():
             lex.zvijezda(str.isdigit)
-            yield lex.token(c0.BROJ)
+            if lex.sadržaj == '0' or lex.sadržaj[0] != '0':
+                yield lex.token(c0.BROJ)
+            else: lex.greška('druge baze nisu podržane')
         elif znak.islower():
             lex.zvijezda(str.isalpha)
+            if lex.sadržaj == 'break': yield lex.token(c0.BREAK)
             yield lex.token(ključna_riječ(c0, lex.sadržaj) or c0.IME)
         else: yield lex.token(operator(c0, znak) or lex.greška())
 
@@ -125,13 +132,13 @@ class c0Parser(Parser):
             ime = Token(c0.AIME, self.pročitaj(c0.IME).sadržaj)
         else: self.greška()
         self.logička = bool(ime ** c0.LIME)
-        self.pročitaj(c0.OTV)
         tipF[ime.sadržaj] = ime
+        self.pročitaj(c0.OTV)
         if self >> c0.ZATV: parametri = []
         elif self >> {c0.BOOL, c0.INT}:
-            if self.zadnji == c0.BOOL:
+            if self.zadnji.sadržaj == 'bool':
                 ime = Token(c0.LIME, self.pročitaj(c0.IME).sadržaj)
-            elif self.zadnji == c0.INT:
+            elif self.zadnji.sadržaj == 'int':
                 ime = Token(c0.AIME, self.pročitaj(c0.IME).sadržaj)
             else: self.greška()
             tipV[ime.sadržaj] = ime
@@ -149,7 +156,7 @@ class c0Parser(Parser):
             self.pročitaj(c0.ZATV)
         else: self.greška()
         self.pročitaj(c0.VOTV)
-        naredba = self.naredba()
+        naredba = self.naredbe()
         self.pročitaj(c0.VZATV)
         return Funkcija(ime, parametri, naredba)
 
@@ -181,18 +188,22 @@ class c0Parser(Parser):
             self.pročitaj(c0.ZATV)
             naredba = self.naredba()
             return For(jednostavni, izraz, jednostavni2, naredba)
+        elif self >> c0.BREAK:
+            br = self.zadnji
+            self.pročitaj(c0.TOČKAZ)
+            return br
         elif self >> c0.RETURN:
-            izraz = self.izraz()
-            self.pročitaj(c0.TZAREZ)
-            return Return(izraz)
+            """izraz = self.izraz()
+            self.pročitaj(c0.TZAREZ)"""
+            return Return(self.izraz)
         elif self >> c0.VOTV:
             naredba = self.naredbe()
             self.pročitaj(c0.VZATV)
-            return VNarV(naredba)
+            return naredba
         else:
             jednostavni = self.jednostavni()
             self.pročitaj(c0.TZAREZ)
-            return Jednostavni(jednostavni)
+            return jednostavni
 
     def naredbe(self):
         naredbe = [self.naredba()]
@@ -219,7 +230,8 @@ class c0Parser(Parser):
                 return Pridruživanje(ime, izraz)
             else:
                 return Pridruživanje(ime, '0')
-        elif self.pogledaj() == c0.OTV or self.pogledaj() == c0.IME:
+        elif self.pogledaj().sadržaj == '(' or self.pogledaj() ** c0.IME:
+            print("anteskasdad",self.pogledaj().sadržaj == '(' or self.pogledaj() ** c0.IME)
             naziv = self.naziv()
             asnop = self.asnop()
             izraz = self.izraz()
@@ -270,11 +282,9 @@ class c0Parser(Parser):
                 izraz3 = self.izraz()
                 return Trinar(izraz, izraz2, izraz3)
             else:"""
-                """
-                binop = self.binop(izraz)
+            """binop = self.binop(izraz)
                 izraz2 = self.izraz2()
                 return Binop(izraz, binop, izraz2)
-
                 izraz = [self.izraz()]
                 while self >> c0.ZAREZ:
                     izraz.append(self.izraz())
@@ -285,11 +295,13 @@ class c0Parser(Parser):
                     'Nedeklarirana funkcija ' + ime.sadržaj)
                 return Poziv(funkcija, self.argumenti(funkcija.parametri))
                 return Poziv(ime, izraz)"""
+
     def poziv(self, ime):
         if ime in self.funkcije: funkcija = self.funkcije[ime]
         else: raise SemantičkaGreška(
             'Nedeklarirana funkcija ' + ime.sadržaj)
         return Poziv(funkcija, self.argumenti(funkcija.parametri))
+
 
     def argumenti(self, parametri):
         arg = []
@@ -387,22 +399,50 @@ class c0Parser(Parser):
 
 
     def asnop(self):
-        if self >> {c0.JEDNAKO}:
+        if self >> c0.JEDNAKO:
             return self.zadnji
 
     start = program
 
 def izvrši(funkcije, *argv):
-    program = Token(c0.AIME, 'program')
+    program = Token(c0.AIME, 'main')
     if program in funkcije:
         izlazna_vrijednost = funkcije[program].pozovi(argv)
         print('Program je vratio: ', izlazna_vrijednost)
-    else: raise SemantičkaGreška('Nema glavne funkcije "program"')
+    else: raise SemantičkaGreška('Nema glavne funkcije "main"')
+
+
+
+class Funkcija(AST('ime parametri naredba')):
+    def pozovi(self, argumenti):
+        lokalni = dict(zip(self.parametri, argumenti))
+        print(self.parametri)
+        print("ASURBANIPAL",argumenti)
+        print(lokalni)
+        print()
+        try: self.naredba.izvrši(lokalni)
+        except Povratak as exc:
+            if exc.povratna_vrijednost == None:
+                print("None")
+                return 0;
+            else:
+                return exc.povratna_vrijednost
+
+class Poziv(AST('funkcija argumenti')):
+    def vrijednost(self, mem):
+        print(self.argumenti)
+        print(mem)
+
+        print()
+        arg = [argument.vrijednost(mem) for argument in self.argumenti]
+        return self.funkcija.pozovi(arg)
 
 class While(AST('uvjet naredba')):
     def izvrši(self, mem):
         while self.uvjet.vrijednost(mem):
-            self.naredba.izvrši(mem)
+            try:
+                self.naredba.izvrši(mem)
+            except BreakException: break
 
 class If(AST('izraz, naredba')):
     def izvrši(self, mem):
@@ -419,18 +459,54 @@ class For(AST('jednostavni, izraz, jednostavni2, naredba')):
     def izvrši(self, mem):
         self.jednostavni.izvrši(mem)
         while self.izraz.vrijednost(mem):
-            self.naredba.izvrši(mem)
-            self.jednostavni2.izvrši(mem)
+            try:
+                self.naredba.izvrši(mem)
+                self.jednostavni2.izvrši(mem)
+            except BreakException: break
+
+class BreakException(Exception): pass
 
 class Return(AST('što')):
     def izvrši(self, mem):
         print(self.što)
         print(self.što.vrijednost(mem))
+        if self.što.vrijednost(mem) == None:
+            raise Povratak2()
         raise Povratak(self.što.vrijednost(mem))
 
 class Blok(AST('naredbe')):
     def izvrši(self, mem):
         for naredba in self.naredbe: naredba.izvrši(mem)
+
+
+class Pridruživanje(AST('ime pridruženo')):
+    def izvrši(self, mem):
+        if tipV[self.ime.sadržaj].sadržaj == 'false' or tipV[self.ime.sadržaj].sadržaj == 'true':
+            tip = 1
+        else: tip = 0
+        if self.pridruženo.vrijednost(mem) == 'false' or self.pridruženo.vrijednost(mem) == 'true':
+            vrj = 1
+        else: vrj = 0
+        if(vrj != tip):
+            raise SemantičkaGreška("Ne podudaraju se tipovi")
+        mem[self.ime] = self.pridruženo.vrijednost(mem)
+        print(self.ime.sadržaj)
+        print("go_____r______e")
+
+class Pridruživanje2(AST('ime op pridruženo')):
+    def izvrši(self, mem):
+        if tipV[self.ime.sadržaj].sadržaj == 'false' or tipV[self.ime.sadržaj].sadržaj == 'true':
+            tip = 1
+        else: tip = 0
+        if self.pridruženo.vrijednost(mem) == 'false' or self.pridruženo.vrijednost(mem) == 'true':
+            vrj = 1
+        else: vrj = 0
+        if(vrj != tip):
+            raise SemantičkaGreška("Ne podudaraju se tipovi")
+        if self.op.sadržaj == '=':
+            mem[self.ime] = self.pridruženo.vrijednost(mem)
+        print(self.ime.sadržaj)
+        print("go_____r______e")
 
 class Binarna(AST('op lijevo desno')):
     def vrijednost(self, env):
@@ -470,208 +546,100 @@ class Unarna(AST('op ispod')):
         elif o ** c0.PPLUS: return z+1
         elif o ** c0.MMINUS: return z-1
 
-class Pridruživanje(AST('ime pridruženo')):
-    def izvrši(self, mem):
-        if tipV[self.ime.sadržaj].sadržaj == 'false' or tipV[self.ime.sadržaj].sadržaj == 'true':
-            tip = 1
-        else: tip = 0
-        if self.pridruženo.vrijednost(mem) == 'false' or self.pridruženo.vrijednost(mem) == 'true':
-            vrj = 1
-        else: vrj = 0
-        if(vrj != tip):
-            raise SemantičkaGreška("Ne podudaraju se tipovi")
-        mem[self.ime] = self.pridruženo.vrijednost(mem)
-        print(self.ime.sadržaj)
-        print("go_____r______e")
-
-class Pridruživanje2(AST('ime op pridruženo')):
-    def izvrši(self, mem):
-        if tipV[self.ime.sadržaj].sadržaj == 'false' or tipV[self.ime.sadržaj].sadržaj == 'true':
-            tip = 1
-        else: tip = 0
-        if self.pridruženo.vrijednost(mem) == 'false' or self.pridruženo.vrijednost(mem) == 'true':
-            vrj = 1
-        else: vrj = 0
-        if(vrj != tip):
-            raise SemantičkaGreška("Ne podudaraju se tipovi")
-        if self.op.sadržaj == '=':
-            mem[self.ime] = self.pridruženo.vrijednost(mem)
-        print(self.ime.sadržaj)
-        print("go_____r______e")
-
-class Funkcija(AST('ime parametri naredba')):
-    def pozovi(self, argumenti):
-        lokalni = dict(zip(self.parametri, argumenti))
-        print(self.parametri)
-        print("ASURBANIPAL",argumenti)
-        print(lokalni)
-        print()
-        try: self.naredba.izvrši(lokalni)
-        except Povratak as exc: return exc.povratna_vrijednost
-
-class Poziv(AST('funkcija argumenti')):
-    def vrijednost(self, mem):
-        print(self.argumenti)
-        print(mem)
-
-        print()
-        arg = [argument.vrijednost(mem) for argument in self.argumenti]
-        return self.funkcija.pozovi(arg)
-
+class Povratak2(Exception): pass
 class Povratak(Exception):
     @property
     def povratna_vrijednost(self): return self.args[0]
 
-        """
+"""
 def binop(self, izraz):
 
 
 
 DO TUD
 
+"""
 
+def izračunaj(string): return c0Parser.parsiraj(c0_lex(string)).izvrši()
+def tokeni(string): return list(c0_lex(string))
 
+#izvrši(faktorijela, {})
 
+if __name__ == '__main__':
+    print(tokeni('(3+7)%3'))
+    print()
+    print(tokeni('(3+7)%3'))
+    print(integer(2**31+1))
+    print(tokeni('-37% 5'))
+    print(tokeni('-37/ 5'))
+    #print(tokeni('-2147483648/-1'))
+    print(-37 % 5)
+    print(-37 // 5)
+    print(sign(-5))
+    print(-2**31)
+    print(integer(-2**31))
+    print(int(-2**31)%(2**32))
+    print(modl(-37,-5))
 
-        """
+    #print(tokeni('1>>-1'))
+    print(tokeni('1>>0'))
+    #print(tokeni('1>>32'))
+    #print(tokeni('1<<-1'))
+    print(tokeni('1<<0'))
+    print(tokeni('1<<31'))
+    #print(tokeni('1<<32'))
+    print(integer(2**31))
 
+    print(tokeni('21474^0'))
+    print(tokeni('2147483647|-1'))
+    print()
+    print(tokeni('(212<<4&3134|133>>2^121356543)<<(3^7)>>(45689&25<<7)'))
+    print(tokeni('(212<<4&3134|133>>2^121356543)<<(3^7)>>(45689&25<<7)'))
+    print()
+    print(tokeni('45689&25<<7'))
+    print(tokeni('(3^7)'))
+    print(tokeni('212<<4&3134|133>>2^121356543'))
+    print(tokeni('3134|133>>2^121356543'))
+    print()
+    print(tokeni('212<<4&3134'))
+    print(tokeni('133>>2'))
+    print(tokeni('2^121356543'))
+    print(tokeni('3134|133>>2'))
+    print(tokeni('-(15<<13)/(3+4|3<<9)>>28-26'))
+    print()
+    print(tokeni('!3'))
+    print(tokeni('!7'))
+    print(tokeni('!0'))
+    print(tokeni('++7'))
+    print(tokeni('(--0)*3+8*(++7)'))
+    print(tokeni('~5'))
+    print()
+    print(*tokeni('''int main()
+{
+  int g;
+  g = 7;
+  bool mirko = true;
+  funkcije(7,true, 25 << 3);
+  return 0;
+}'''))
+    print(tokeni('''
+    int f( int x, int y){
+    int i;
+    for(i = 10; i)
+    }
+    int main () {
+    int x = 2;
 
-    def log(self):
-        disjunkti = [self.disjunkt()]
-        while self >> PSK.ILI: disjunkti.append(self.disjunkt())
-        return disjunkti[0] if len(disjunkti) == 1 else Disjunkcija(disjunkti)
+    return x;
+    }'''))
 
-    def disjunkt(self):
-        if self >> PSK.LKONST: return self.zadnji
-        elif self >> PSK.LIME:
-            ime = self.zadnji
-            if self >= PSK.OTV: return self.poziv(ime)
-            else: return ime
-        lijevo = self.aritm()
-        manje = self.pročitaj(PSK.JEDNAKO, PSK.MANJE) ** PSK.MANJE
-        desno = self.aritm()
-        return Usporedba(bool(manje), lijevo, desno)
-
-    def poziv(self, ime):
-        if ime in self.funkcije: funkcija = self.funkcije[ime]
-        else: raise SemantičkaGreška(
-            'Nedeklarirana funkcija ' + ime.sadržaj)
-        return Poziv(funkcija, self.argumenti(funkcija.parametri))
-
-    def argumenti(self, parametri):
-        arg = []
-        prvi = True
-        for parametar in parametri:
-            self.pročitaj(PSK.OTV if prvi else PSK.ZAREZ)
-            prvi = False
-            if parametar ** PSK.LIME: arg.append(self.log())
-            else: arg.append(self.aritm())
-        self.pročitaj(PSK.ZATV)
-        return arg
-
-    def aritm(self):
-        članovi = [self.član()]
-        while self >> {PSK.PLUS, PSK.MINUS}:
-            operator = self.zadnji
-            dalje = self.član()
-            članovi.append(dalje if operator ** PSK.PLUS else Suprotan(dalje))
-        return članovi[0] if len(članovi) == 1 else Zbroj(članovi)
-
-    def član(self):
-        if self >> PSK.MINUS: return Suprotan(self.faktor())
-        faktori = [self.faktor()]
-        while self >> PSK.ZVJEZDICA: faktori.append(self.faktor())
-        return faktori[0] if len(faktori) == 1 else Umnožak(faktori)
-
-    def faktor(self):
-        if self >> PSK.BROJ: return self.zadnji
-        elif self >> PSK.AIME:
-            ime = self.zadnji
-            if self >= PSK.OTV: return self.poziv(ime)
-            else: return ime
-        else:
-            self.pročitaj(PSK.OTV)
-            u_zagradi = self.aritm()
-            self.pročitaj(PSK.ZATV)
-            return u_zagradi
-
-    start = program
-
-
-def izvrši(funkcije, *argv):
-    program = Token(PSK.AIME, 'program')
-    if program in funkcije:
-        izlazna_vrijednost = funkcije[program].pozovi(argv)
-        print('Program je vratio: ', izlazna_vrijednost)
-    else: raise SemantičkaGreška('Nema glavne funkcije "program"')
-
-
-class Funkcija(AST('ime parametri naredba')):
-    def pozovi(self, argumenti):
-        lokalni = dict(zip(self.parametri, argumenti))
-        print(self.parametri)
-        print("ASURBANIPAL",argumenti)
-        print(lokalni)
-        print()
-        try: self.naredba.izvrši(lokalni)
-        except Povratak as exc: return exc.povratna_vrijednost
-
-class Poziv(AST('funkcija argumenti')):
-    def vrijednost(self, mem):
-        print(self.argumenti)
-        print(mem)
-
-        print()
-        arg = [argument.vrijednost(mem) for argument in self.argumenti]
-        return self.funkcija.pozovi(arg)
-
-class Grananje(AST('uvjet željeno naredba inače')):
-    def izvrši(self, mem):
-        print("mem",mem)
-        if self.uvjet.vrijednost(mem) == self.željeno: self.naredba.izvrši(mem)
-        else: self.inače.izvrši(mem)
-
-
-
-class Blok(AST('naredbe')):
-    def izvrši(self, mem):
-        for naredba in self.naredbe: naredba.izvrši(mem)
-
-class Pridruživanje(AST('ime pridruženo')):
-    def izvrši(self, mem):
-        mem[self.ime] = self.pridruženo.vrijednost(mem)
-        print(self.ime.sadržaj)
-        print("go_____r______e")
-
-class Vrati(AST('što')):
-    def izvrši(self, mem):
-        print(self.što)
-        print(self.što.vrijednost(mem))
-        raise Povratak(self.što.vrijednost(mem))
-
-class Disjunkcija(AST('disjunkti')):
-    def vrijednost(self, mem):
-        return any(disjunkt.vrijednost(mem) for disjunkt in self.disjunkti)
-
-class Usporedba(AST('manje lijevo desno')):
-    def vrijednost(self, mem):
-        l, d = self.lijevo.vrijednost(mem), self.desno.vrijednost(mem)
-        return l < d if self.manje else l == d
-
-class Zbroj(AST('pribrojnici')):
-    def vrijednost(self, mem):
-        return sum(pribroj.vrijednost(mem) for pribroj in self.pribrojnici)
-
-class Suprotan(AST('od')):
-    def vrijednost(self, mem): return -self.od.vrijednost(mem)
-
-class Umnožak(AST('faktori')):
-    def vrijednost(self, mem):
-        p = 1
-        for faktor in self.faktori: p *= faktor.vrijednost(mem)
-        return p
-
-
-class Povratak(Exception):
-    @property
-    def povratna_vrijednost(self): return self.args[0]
+    faktorijela = c0Parser.parsiraj(c0_lex('''
+    int main () {
+    int x = 2;
+    x;
+    int a;
+    (a);
+    }'''))
+    print(faktorijela)
+    print()
+    izvrši(faktorijela, {})
