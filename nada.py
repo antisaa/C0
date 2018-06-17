@@ -38,26 +38,79 @@ class c0Parser(Parser):
         tip = self.pročitaj(c0.BOOL, c0.INT)
         self.logička = bool(tip ** c0.BOOL)
         ime = self.pročitaj(c0.IME)
-        tipF.append(ime.sadržaj : tip.sadržaj)
+        tipF[ime] = tip
         self.pročitaj(c0.OTV)
         if self >> c0.ZATV: parametri = []
         elif self >> {c0.BOOL, c0.INT}:
-            tip = self.zadnji.sadržaj
+            tip = self.zadnji
             parametri = [self.pročitaj(c0.IME)]
-            tipV.append(self.zadnji.sadržaj : tip)
+            if self.zadnji in tipV:
+                raise SemantičkaGreška("Opetovano deklaracija.")
+            tipV[self.zadnji] = tip
             while self >> PSK.ZAREZ:
                 self.pročitaj(c0.BOOL, c0.INT)
-                tip = self.zadnji.sadržaj
+                tip = self.zadnji
                 parametri.append(self.pročitaj(c0.IME))
-                tipV.append(self.zadnji.sadržaj : tip)
+                if self.zadnji in tipV:
+                    raise SemantičkaGreška("Opetovano deklaracija.")
+                tipV[self.zadnji] = tip
             self.pročitaj(c0.ZATV)
         else: self.greška()
         self.pročitaj(c0.VOTV)
-        naredba = self.naredba()
+        stmt = self.stmt()
         self.pročitaj(c0.VZATV)
-        return Funkcija(ime, parametri, naredba) #MOŽDA TREBA STAVITI I TIP funkcije
+        return Funkcija(ime, parametri, stmt) #MOŽDA TREBA STAVITI I TIP funkcije
 
 
-    def naredba(self):
-        if self >> {c0.IF, c0.WHILE}:
+    def stmt(self):
+        if self >> c0.FOR:
+            return self.for_()
+        elif self >> c0.IF:
             petlja = self.zadnji ** c0.WHILE
+        elif self >> c0.WHILE:
+            petlja = self.zadnji ** c0.WHILE
+
+        elif self >> c0.RETURN:
+        elif self >> c0.VOTV:
+        else:
+            self.jednostavni()
+
+    def for_(self):
+        self.pročitaj(c0.OTV)
+        i = self.jednostavni()
+        print(i)
+        print(i.sadržaj)
+        self.pročitaj(c0.JEDNAKO)
+        početak = self.pročitaj(c0.BROJ)
+        self.pročitaj(c0.TOČKAZ)
+        i2 = self.pročitaj(c0.IME)
+        if i != i2: raise SemantičkaGreška('nisu podržane različite varijable')
+        self.pročitaj(c0.MANJE)
+        granica = self.pročitaj(c0.BROJ)
+        self.pročitaj(c0.TOČKAZ)
+        i3 = self.pročitaj(c0.IME)
+        if i != i3: raise SemantičkaGreška('nisu podržane različite varijable')
+        if self >> c0.PLUSP: inkrement = nenavedeno
+        elif self >> c0.PLUSJ: inkrement = self.pročitaj(c0.BROJ)
+        self.pročitaj(c0.OZATV)
+        if self >> c0.VOTV:
+            blok = []
+            while not self >> c0.VZATV: blok.append(self.naredba())
+        else: blok = [self.naredba()]
+        return Petlja(i, početak, granica, inkrement, blok)
+
+    def jednostavni(self):
+        if self >> c0.IME:
+            ime = self.pročitaj(c0.IME)
+            if self >> {c0.PPLUS , c0.MMINUS}:
+                self.pročitaj(c0.PPLUS, c0.MMINUS)
+
+    def naziv(self):
+        if self >> c0.OTV:
+            self.pročitaj(c0.OTV)
+            naz = self.naziv()
+            self.pročitaj(c0.ZATV)
+            return naz
+        else:
+            naz = self.pročitaj(c0.IME)
+            return naz
