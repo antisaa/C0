@@ -18,18 +18,18 @@ def integer(number):
 
 class c0(enum.Enum):
     PLUS, MINUS, PUTA, KROZ, MOD = '+-*/%'
-    OTV, ZATV, VOTV, TZAREZ, ZAREZ, VZATV, UPITNIK, DVOTOCKA = '(){;,}?:'
+    OTV, ZATV, VOTV, TZAREZ, ZAREZ, VZATV, UPITNIK, DVOTOČKA = '(){;,}?:'
     LSHIFT, RSHIFT = '<<', '>>'
     BITAND, BITOR, BITXOR = '&', '|', '^'
     LOGAND, LOGOR = '&&', '||'
-    EQL, DISEQL = '==', '!='
+    JJEDNAKO, RAZLIČITO = '==', '!='
     MANJE, VEĆE, VJEDNAKO, MJEDNAKO = '<', '>', '>=', '<='
     JEDNAKO = '='
     INT, BOOL = 'int', 'bool'
     TRUE, FALSE = 'true', 'false'
     FOR, WHILE, IF, ELSE = 'for', 'while', 'if', 'else'
     LNOT,BNOT ='!~'
-    INC,DEC = '++','--'
+    PPLUS,MMINUS = '++','--'
 
     class BROJ(Token):
         def vrijednost(self, mem):
@@ -61,7 +61,7 @@ def c0_lex(string):
             elif lex.slijedi('='):  yield lex.token(c0.VJEDNAKO)
             else:   yield lex.token(c0.VEĆE)
         elif znak == '=':
-            if lex.slijedi('='):    yield lex.token(c0.EQL)
+            if lex.slijedi('='):    yield lex.token(c0.JJEDNAKO)
             else:   yield lex.token(c0.JEDNAKO)
         elif znak == '&':
             if lex.slijedi('&'):    yield lex.token(c0.LOGAND)
@@ -70,11 +70,14 @@ def c0_lex(string):
             if lex.slijedi('|'):    yield lex.token(c0.LOGOR)
             else:   yield lex.token(c0.BITOR)
         elif znak == '+':
-            if lex.slijedi('+'):    yield lex.token(c0.INC)
+            if lex.slijedi('+'):    yield lex.token(c0.PPLUS)
             else:   yield lex.token(c0.PLUS)
         elif znak == '-':
-            if lex.slijedi('-'):    yield lex.token(c0.DEC)
+            if lex.slijedi('-'):    yield lex.token(c0.MMINUS)
             else:   yield lex.token(c0.MINUS)
+        elif znak == '!':
+            if lex.slijedi('='):    yield lex.token(c0.RAZLIČITO)
+            else:   yield lex.token(c0.LNOT)
         elif znak.isdigit():
             lex.zvijezda(str.isdigit)
             yield lex.token(c0.BROJ)
@@ -217,17 +220,12 @@ class c0Parser(Parser):
                 return Jednostavni(ime, '0')
         elif self.pogledaj() == c0.OTV or self.pogledaj() == c0.IME:
             naziv = self.naziv()
-            if self >> c0.PPLUS:
-                return PPlus(naziv)
-            elif self >> c0.MMINUS:
-                return MMinus(naziv)
-            else:
-                asnop = self.asnop()
-                izraz = self.izraz()
-                return Asnop(naziv, asnop, izraz)
+            asnop = self.asnop()
+            izraz = self.izraz()
+            return Asnop(naziv, asnop, izraz)
         else:
             izraz = self.izraz()
-            return Izraz(izraz)
+            return izraz
 
     def naziv(self):
         if self >> c0.OTV:
@@ -271,7 +269,7 @@ class c0Parser(Parser):
             """izraz = self.izraz()
             if self >> c0.UPITNIK:
                 izraz2 = self.izraz()
-                self.pročitaj(c0.DVOTOCKA)
+                self.pročitaj(c0.DVOTOČKA)
                 izraz3 = self.izraz()
                 return Trinar(izraz, izraz2, izraz3)
             else:"""
@@ -348,13 +346,13 @@ class c0Parser(Parser):
         if self >> c0.MINUS: return Unarna(self.zadnji, self.faktor())
         elif self >> c0.LNOT: return Unarna(self.zadnji, self.faktor())
         elif self >> c0.BNOT: return Unarna(self.zadnji, self.faktor())
-        elif self >> c0.INC: return Unarna(self.zadnji, self.faktor())
-        elif self >> c0.DEC: return Unarna(self.zadnji, self.faktor())
+        elif self >> c0.PPLUS: return Unarna(self.zadnji, self.faktor())
+        elif self >> c0.MMINUS: return Unarna(self.zadnji, self.faktor())
 
 
         baza = self.izraz()
         return baza
-        
+
     """def baza(self):
         if self >> c0.BROJ: trenutni = self.zadnji
         elif self >> c0.OTV:
@@ -403,8 +401,8 @@ class Unarna(AST('op ispod')):
         if o ** c0.MINUS: return -z
         elif o ** c0.LNOT: return int(not z)
         elif o ** c0.BNOT: return ~z
-        elif o ** c0.INC: return z+1
-        elif o ** c0.DEC: return z-1
+        elif o ** c0.PPLUS: return z+1
+        elif o ** c0.MMINUS: return z-1
 
 
 
