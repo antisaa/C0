@@ -100,7 +100,7 @@ def c0_lex(string):
 # argumenti -> izraz (ZAREZ argumenti)?
 # izraz -> aritm |! log [KONTEKST!]
 
-class PseudokodParser(Parser):
+class c0Parser(Parser):
     self.tipF = {}
     self.tipV = {}
 
@@ -120,10 +120,10 @@ class PseudokodParser(Parser):
         elif self >> c0.INT:
             ime = Token(c0.AIME, self.pročitaj(c0.IME).sadržaj)
         else: self.greška()
-        self.logička = bool(ime ** PSK.LIME)
-        self.pročitaj(PSK.OTV)
+        self.logička = bool(ime ** c0.LIME)
+        self.pročitaj(c0.OTV)
         tipF[ime.sadržaj] = ime
-        if self >> PSK.ZATV: parametri = []
+        if self >> c0.ZATV: parametri = []
         elif self >> {c0.BOOL, c0.INT}:
             if self.zadnji == c0.BOOL:
                 ime = Token(c0.LIME, self.pročitaj(c0.IME).sadržaj)
@@ -142,7 +142,7 @@ class PseudokodParser(Parser):
                 else: self.greška()
                 tipV[ime.sadržaj] = ime
                 parametri.append(ime)
-            self.pročitaj(PSK.ZATV)
+            self.pročitaj(c0.ZATV)
         else: self.greška()
         self.pročitaj(c0.VOTV)
         naredba = self.naredba()
@@ -182,13 +182,20 @@ class PseudokodParser(Parser):
             self.pročitaj(c0.TZAREZ)
             return Return(izraz)
         elif self >> c0.VOTV:
-            naredba = self.naredba()
+            naredba = self.naredbe()
             self.pročitaj(c0.VZATV)
             return VNarV(naredba)
         else:
             jednostavni = self.jednostavni()
             self.pročitaj(c0.TZAREZ)
             return Jednostavni(jednostavni)
+
+    def naredbe(self):
+        naredbe = [self.naredba()]
+        while self >> c0.TZAREZ:
+            if self >= c0.ZATV: return Blok(naredbe)
+            naredbe.append(self.naredba())
+        return Blok(naredbe)
 
     def jednostavni(self):
         if self >> c0.BOOL:
@@ -258,31 +265,151 @@ class PseudokodParser(Parser):
             izraz = self.izraz()
             self.pročitaj(c0.ZATV)
             return Izraz(izraz)
-        elif self >> {c0.LNOT, c0.BNOT, c0.MINUS}:
-            op = self.zadnji
-            izraz = self.izraz()
-            return Unarna(op, izraz)
-        elif:
-            izraz = self.izraz()
+        else:
+            bit_or = self.bit_or()
+            return bit_or
+            """izraz = self.izraz()
             if self >> c0.UPITNIK:
                 izraz2 = self.izraz()
                 self.pročitaj(c0.DVOTOCKA)
                 izraz3 = self.izraz()
                 return Trinar(izraz, izraz2, izraz3)
-        else:
-            """
-            izraz = self.izraz()
-            binop = self.binop()
-            izraz2 = self.izraz2()
-            return Binop(izraz, binop, izraz2)
-"""
+            else:"""
+                """
+                binop = self.binop(izraz)
+                izraz2 = self.izraz2()
+                return Binop(izraz, binop, izraz2)
+                """
+    def bit_or(self):
+        trenutni = self.bit_xor()
+        while True:
+            if self >> c0.BITOR:
+                trenutni = Binarna(
+                    op = self.zadnji,
+                    lijevo = trenutni,
+                    desno = self.bit_xor()
+                )
+            else: return trenutni
+
+    def bit_xor(self):
+        trenutni = self.bit_and()
+        while True:
+            if self >> c0.BITXOR:
+                trenutni = Binarna(
+                    op = self.zadnji,
+                    lijevo = trenutni,
+                    desno = self.bit_and()
+                )
+            else: return trenutni
+
+
+    def bit_and(self):
+        trenutni = self.shift_izraz()
+        while True:
+            if self >> c0.BITAND:
+                trenutni = Binarna(
+                    op = self.zadnji,
+                    lijevo = trenutni,
+                    desno = self.shift_izraz()
+                )
+            else: return trenutni
+
+    def shift_izraz(self):
+        trenutni = self.osnovne()
+        while True:
+            if self >> {c0.RSHIFT, c0.LSHIFT}:
+                trenutni = Binarna(
+                    op = self.zadnji,
+                    lijevo = trenutni,
+                    desno = self.osnovne()
+                )
+            else: return trenutni
+
+    def osnovne(self):
+        trenutni = self.član()
+        while True:
+            if self >> {c0.PLUS, c0.MINUS}:
+                trenutni = Binarna(
+                    op = self.zadnji,
+                    lijevo = trenutni,
+                    desno = self.član()
+                )
+            else: return trenutni
+
+    def član(self):
+        trenutni = self.faktor()
+        while True:
+            if self >> {c0.PUTA, c0.KROZ, c0.MOD}:
+                trenutni = Binarna(self.zadnji, trenutni, self.faktor())
+            else: return trenutni
+
+
+    def faktor(self):
+        if self >> c0.MINUS: return Unarna(self.zadnji, self.faktor())
+        elif self >> c0.LNOT: return Unarna(self.zadnji, self.faktor())
+        elif self >> c0.BNOT: return Unarna(self.zadnji, self.faktor())
+        elif self >> c0.INC: return Unarna(self.zadnji, self.faktor())
+        elif self >> c0.DEC: return Unarna(self.zadnji, self.faktor())
+
+
+        baza = self.izraz()
+        return baza
+        
+    """def baza(self):
+        if self >> c0.BROJ: trenutni = self.zadnji
+        elif self >> c0.OTV:
+            trenutni = self.bit_or()
+            self.pročitaj(c0.ZATV)
+        else: self.greška()
+        return trenutni"""
+
+
     def asnop(self):
         if self >> {c0.JEDNAKO}:
             return self.zadnji
 
-    def binop(self):
-        """
+class Binarna(AST('op lijevo desno')):
+    def vrijednost(self, env):
+        o,x,y = self.op, self.lijevo.vrijednost(env), self.desno.vrijednost(env)
+        try:
+            if o ** c0.BITOR: return integer(x) | integer(y)
+            elif o ** c0.BITXOR: return integer(x) ^ integer(y)
+            elif o ** c0.BITAND: return integer(x) & integer(y)
+            elif o ** c0.RSHIFT:
+                if y < 0: raise SemantičkaGreška("right shift count is negative")
+                elif y > 31: raise SemantičkaGreška("right shift count >= width of type")
+                else: return integer(x // (2**y))
+            elif o ** c0.LSHIFT:
+                if y < 0: raise SemantičkaGreška("left shift count is negative")
+                elif y > 31: raise SemantičkaGreška("left shift count >= width of type")
+                else: return integer(x * (2**y))
+            elif o ** c0.PLUS: return integer(x + y)
+            elif o ** c0.MINUS: return integer(x - y)
+            elif o ** c0.PUTA: return integer(x * y)
+            elif o ** c0.KROZ:
+                if y == 0 : raise SemantičkaGreška("Dijeljenje s nulom.")
+                elif integer(x) == -2**31 and integer(y) == -1 : raise SemantičkaGreška("Greška: overflow.")
+                return integer(sign(x) * sign(y) * ( (sign(x)*x) // (sign(y)*y)) ) #handlaj  dijeljenje nulom
+            elif o ** c0.MOD:
+                if y == 0 : raise SemantičkaGreška("Dijeljenje s nulom.")
+                elif integer(x) == -2**31 and integer(y) == -1 : raise SemantičkaGreška("Greška: overflow.")
+                return integer(sign(x) * ( (sign(x)*x) % (sign(y)*y)) ) #handlaj  dijeljenje nulom
+            else: assert not 'slučaj'
+        except ArithmeticError as ex: o.problem(*ex.args)
 
+class Unarna(AST('op ispod')):
+    def vrijednost(self, env):
+        o, z = self.op, self.ispod.vrijednost(env)
+        if o ** c0.MINUS: return -z
+        elif o ** c0.LNOT: return int(not z)
+        elif o ** c0.BNOT: return ~z
+        elif o ** c0.INC: return z+1
+        elif o ** c0.DEC: return z-1
+
+
+
+        """
+def binop(self, izraz):
 
 
 
@@ -293,12 +420,7 @@ DO TUD
 
 
         """
-    def naredbe(self):
-        naredbe = [self.naredba()]
-        while self >> PSK.ZAREZ:
-            if self >= PSK.ZATV: return Blok(naredbe)
-            naredbe.append(self.naredba())
-        return Blok(naredbe)
+
 
     def log(self):
         disjunkti = [self.disjunkt()]
