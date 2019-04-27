@@ -1,1 +1,2 @@
-# C0 - druga zadaća iz kolegija Interpretacija programa
+#  Assignment for subject Compilers and interpreters
+C0 is interpreter for simplified programing language C.
